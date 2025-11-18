@@ -1,0 +1,70 @@
+# Nama alur kerja Anda, akan muncul di tab "Actions" GitHub
+name: Deploy Web App ke AWS EC2
+
+# 1. PEMICU: Kapan workflow ini harus berjalan?
+on:
+  push:
+    branches: [ "main" ] # Hanya berjalan saat ada push ke branch "main"
+
+# 2. PEKERJAAN: Apa yang harus dilakukan?
+jobs:
+  # ----------------------------------------------
+  # PEKERJAAN 1: Build dan Push Docker Image
+  # ----------------------------------------------
+  build-and-push:
+    runs-on: ubuntu-latest # Pekerjaan ini berjalan di server milik GitHub
+    steps:
+      # Langkah 1: Ambil kode Anda dari repositori
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Langkah 2: Login ke Docker Hub
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      # Langkah 3: Build & Push image
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./app  # Memberitahu Docker di mana folder "app" Anda
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/projek-cloud-app:latest # (Ganti 'projek-cloud-app' jika mau)
+
+  # ----------------------------------------------
+  # PEKERJAAN 2: Deploy ke Server EC2
+  # ----------------------------------------------
+  deploy-to-ec2:
+    runs-on: ubuntu-latest
+    needs: build-and-push # PEKERJAAN 2 ini HARUS menunggu PEKERJAAN 1 selesai
+    
+    steps:
+      # Langkah 1: Login via SSH dan jalankan perintah di EC2
+      - name: SSH and Deploy
+        uses: appleboy/ssh-action@master
+        with:
+          # Ambil semua data rahasia dari "GitHub Secrets"
+          host: ${{ secrets.AWS_HOST }}
+          username: ${{ secrets.AWS_USER }}
+          key: ${{ secrets.AWS_SSH_KEY }}
+          
+          # Ini adalah skrip yang akan dijalankan di server EC2 Anda
+          script: |
+            # Login ke Docker Hub DI DALAM SERVER EC2
+            echo ${{ secrets.DOCKER_TOKEN }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+            
+            # 1. Hentikan container lama (jika ada)
+            docker stop my-web-app || true
+            
+            # 2. Hapus container lama (jika ada)
+            docker rm my-web-app || true
+            
+            # 3. Tarik image versi terbaru dari Docker Hub
+            docker pull ${{ secrets.DOCKER_USERNAME }}/projek-cloud-app:latest
+            
+            # 4. Jalankan container baru
+            #    PENTING: Kita pakai 80:80 karena Nginx berjalan di port 80
+            docker run -d --name my-web-app -p 80:80 --restart always \
+              ${{ secrets.DOCKER_USERNAME }}/projek-cloud-app:latest
