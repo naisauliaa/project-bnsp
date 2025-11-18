@@ -5,9 +5,9 @@ on:
     branches: [ "main" ]
 
 jobs:
-  # ----------------------------------------------
-  # PEKERJAAN 1: Build dan Push Docker Image
-  # ----------------------------------------------
+
+  #Build dan Push Docker Image
+
   build-and-push:
     runs-on: ubuntu-latest
     steps:
@@ -23,14 +23,13 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
         with:
-          # PERBAIKAN 1: Path context-nya adalah folder 'app'
           context: ./app  
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/projek-cloud-app:latest
 
-  # ----------------------------------------------
-  # PEKERJAAN 2: Deploy ke Server EC2
-  # ----------------------------------------------
+
+  # Deploy ke Server EC2
+
   deploy-to-ec2:
     runs-on: ubuntu-latest
     needs: build-and-push
